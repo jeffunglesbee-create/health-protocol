@@ -394,6 +394,30 @@ function App() {
             <MetricRow label="HRV Bal" value={o.hrv}/>
             <MetricRow label="RHR" value={o.rhr ? `${o.rhr} bpm` : '—'}/>
           </div>
+
+          {/* Strava panel */}
+          {strava && (
+          <div className="rounded-2xl p-4 shadow-sm bg-white" style={{border:'1px solid #E5E7EB',marginTop:'12px'}}>
+            <div className="font-black mb-3" style={{color:'#0A1628',fontSize:10,letterSpacing:'0.15em'}}>
+              STRAVA · {strava.fetched_at ? new Date(strava.fetched_at).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}
+            </div>
+            {strava.activities.slice(0,5).map((a,i)=>(
+              <div key={a.id||i} className="flex justify-between items-center py-1" style={{borderBottom:'1px solid #F3F4F6'}}>
+                <div>
+                  <span className="font-semibold" style={{color:'#0A1628',fontSize:12}}>{a.name}</span>
+                  <span style={{color:'#6B7280',fontSize:10,marginLeft:6}}>{a.sport_type}</span>
+                </div>
+                <div style={{textAlign:'right'}}>
+                  <span className="font-mono font-bold" style={{color:'#7C3AED',fontSize:12}}>
+                    {a.distance ? (a.distance/1000).toFixed(1)+'km' : '—'}
+                  </span>
+                  {a.pr_count > 0 && <span style={{color:'#C2410C',fontSize:10,fontWeight:700,marginLeft:4}}>{a.pr_count}PR</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+          )}
+
         </div>
       )}
 
