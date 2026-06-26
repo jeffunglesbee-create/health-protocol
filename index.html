@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Health Protocol</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { margin:0; background:#EEF2FF; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  .phase-body { display:none; }
+  .phase-body.open { display:block; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const WHOOP_URL = 'https://field-relay-nba.jeffunglesbee.workers.dev/whoop/fetch?days=5';
+const OURA_URL = 'https://raw.githubusercontent.com/jeffunglesbee-create/jubilant-bassoon/main/outbox/oura-data.json';
+
+// ── Design tokens ──────────────────────────────────────────────────
+const GOALS = {
+  DEPRESSION:   { label:"DEPRESSION",   bg:"#DBEAFE", text:"#1E3A8A" },
+  TESTOSTERONE: { label:"TESTOSTERONE", bg:"#FEE2E2", text:"#7F1D1D" },
+  TBI:          { label:"TBI/NEURO",    bg:"#EDE9FE", text:"#3B0764" },
+  SLEEP:        { label:"SLEEP",        bg:"#E0F2FE", text:"#0C4A6E" },
+  CORTISOL:     { label:"CORTISOL ↓",  bg:"#FEF9C3", text:"#713F12" },
+  METHYLATION:  { label:"METHYLATION",  bg:"#CCFBF1", text:"#134E4A" },
+  ADHD:         { label:"ADHD",         bg:"#FCE7F3", text:"#831843" },
+  GUT:          { label:"GUT",          bg:"#F0FDF4", text:"#14532D" },
+};
+const TIMING = {
+  MORNING:   { label:"MORNING",  bg:"#FEF3C7", text:"#78350F" },
+  AFTERNOON: { label:"3–4 PM",   bg:"#FEE2E2", text:"#991B1B" },
+  EVENING:   { label:"8 PM",     bg:"#EDE9FE", text:"#4C1D95" },
+  BEDTIME:   { label:"BEDTIME",  bg:"#1E1B4B", text:"#C7D2FE" },
+};
+const CORTISOL_C = {
+  OPTIMAL: { bg:"#DCFCE7", text:"#14532D", bar:"#16A34A" },
+  MANAGED: { bg:"#FEF9C3", text:"#713F12", bar:"#CA8A04" },
+  MONITOR: { bg:"#FEE2E2", text:"#7F1D1D", bar:"#DC2626" },
+};
+
+// ── Protocol data ──────────────────────────────────────────────────
+const phases = [
+  { id:1, weeks:"WEEKS 1–2", label:"BASELINE", status:"NOW", statusBg:"#16A34A", borderColor:"#2563EB",
+    cortisolPressure:22, cortisolStatus:"MANAGED",
+    note:"Core stack producing results. No additions. Three runs in 6 days, REM 95 twice. Establish clean baseline.",
+    cortisolNote:"CalmAid 80mg VDCC at 8PM is the cortisol anchor. 9-hour half-life at steady state = 42% active at 7:30 AM waking.",
+    supplements:[
+      {name:"Boron",dose:"6mg",timing:"MORNING",goals:["TESTOSTERONE"],fixed:true,note:"Mg retention + D3 activation. No cycling."},
+      {name:"PEA (Levagen+)",dose:"300mg",timing:"MORNING",goals:["TBI","DEPRESSION"],fixed:true,note:"Split AM dose. Total 600mg/day."},
+      {name:"Jarrow Methyl B12 + Methylfolate",dose:"400mcg",timing:"MORNING",goals:["METHYLATION","DEPRESSION"],fixed:false,note:"Week 1 chewable — titration step 1"},
+      {name:"PEA (Levagen+)",dose:"300mg",timing:"AFTERNOON",goals:["TBI","DEPRESSION"],fixed:true,note:"Split PM dose"},
+      {name:"CalmAid (Silexan)",dose:"80mg",timing:"EVENING",goals:["DEPRESSION","CORTISOL"],fixed:true,note:"DO NOT CHANGE DOSE OR TIMING — VDCC, anti-glutamatergic"},
+      {name:"Saffron affron®",dose:"30mg",timing:"BEDTIME",goals:["DEPRESSION","SLEEP","TBI"],fixed:true,note:"Clinical dose. Superior to 20mg. Kynurenine pathway protection."},
+      {name:"Glycine",dose:"3g",timing:"BEDTIME",goals:["SLEEP"],fixed:true,note:"SCN NMDA targeting — resynchronizes master circadian clock"},
+      {name:"Magnesium Glycinate",dose:"Full dose",timing:"BEDTIME",goals:["SLEEP","CORTISOL"],fixed:true,note:"GABA-A + SHBG binding"},
+      {name:"Magnesium Citrate",dose:"As needed",timing:"BEDTIME",goals:["GUT"],fixed:true},
+    ],
+    hardware:[{name:"Red Light (full RED+NIR)",note:"Any time. Add transcranial 20 min/day — head. 2025 RCT mTBI confirmed."},{name:"Compression Boots",note:"9 PM, 20 min — glymphatic clearance"}],
+    actions:["NO DOSE CHANGES — all at evidence-based optima","Begin transcranial red light — point panels at head","Pre-midnight bedtime — Jun 21 proved 86 OPTIMAL"] },
+  { id:2, weeks:"WEEK 3", label:"FOUNDATION", status:"NEXT", statusBg:"#2563EB", borderColor:"#059669",
+    cortisolPressure:20, cortisolStatus:"MANAGED",
+    note:"Two compounds. Cleanest safety profiles. Most consistently deferred. No catecholamine pathway. No methylation interaction.",
+    cortisolNote:"Neither EPA nor D3 affects cortisol. EPA SPM resolution reduces neuroinflammation driving HPA dysregulation.",
+    supplements:[
+      {name:"EPA Omega-3 (VS Super Omega-3)",dose:"1 softgel\n735mg EPA",timing:"MORNING",goals:["DEPRESSION","ADHD","TBI"],fixed:false,note:"THE MOST DEFERRED COMPOUND. Amygdala neuroimaging. SPM resolution. Depression g=0.45. ADHD g=1.09. Same bottle — doubles at Week 10."},
+      {name:"Vitamin D3",dose:"5,000 IU",timing:"MORNING",goals:["TESTOSTERONE","DEPRESSION"],fixed:false,note:"Leydig cell VDR sensitivity. Boron primed for bioactivation. Fixed dose."},
+    ],
+    hardware:[], actions:["Monitor HRV + RHR 1 week with EPA + D3","Same bottle for both — dose increase later, not new product"] },
+  { id:3, weeks:"WEEK 4", label:"NEUROPLASTICITY", status:"UPCOMING", statusBg:"#7C3AED", borderColor:"#7C3AED",
+    cortisolPressure:18, cortisolStatus:"MANAGED",
+    note:"Lion's Mane 2026 RCT — 109 participants, cognitive+sleep+mood confirmed. NAC completes GlyNAC. Brain glucose steal reversal.",
+    cortisolNote:"Both cortisol-neutral. GlyNAC oxidative stress reduction may reduce chronic HPA activation over time.",
+    supplements:[
+      {name:"Lion's Mane (Real Mushrooms)",dose:"500mg",timing:"MORNING",goals:["TBI","ADHD","DEPRESSION"],fixed:false,note:"Fruiting body only. NGF+BDNF. TBI axonal repair. Same bottle — doubles at Week 11."},
+      {name:"NAC",dose:"600mg",timing:"MORNING",goals:["TBI","DEPRESSION"],fixed:false,note:"Completes GlyNAC with bedtime glycine. All 9 aging hallmarks — human RCT. Fixed dose."},
+    ],
+    hardware:[], actions:["Same bottles — dose adjustments later"] },
+  { id:4, weeks:"WEEK 5", label:"MITOCHONDRIA + TESTOSTERONE BEGINS", status:"UPCOMING", statusBg:"#C2410C", borderColor:"#C2410C",
+    cortisolPressure:25, cortisolStatus:"MONITOR",
+    note:"Tongkat Ali 100mg — Physta® ONLY. SMD 1.352 meta. 4-week monitoring window. Ashwagandha Week 7 — NOT simultaneously.",
+    cortisolNote:"⚠ MONITOR — Tongkat Ali begins T-optimization. If Oura HRV balance drops below 85ms — PAUSE until Ashwagandha establishes at Week 7.",
+    supplements:[
+      {name:"MagMind (Jarrow Magtein)",dose:"1 capsule\n144mg L-Threonate",timing:"MORNING",goals:["ADHD","TBI","SLEEP"],fixed:false,note:"Jan 2026 RCT: HRV p=0.036 + 7.5yr cognitive age reduction. Same bottle — doubles Week 11."},
+      {name:"ALCAR",dose:"500mg",timing:"MORNING",goals:["TBI","DEPRESSION"],fixed:false,note:"Mitochondrial — NOT stimulant class. Fixed dose."},
+      {name:"Tongkat Ali Physta®",dose:"100mg",timing:"MORNING",goals:["TESTOSTERONE"],fixed:false,note:"PHYSTA® ONLY. 4 weeks at 100mg before increase. Same bottle → 200mg Week 9."},
+    ],
+    hardware:[], actions:["⚡ GET CBC + FERRITIN + VITAMIN D PANEL THIS WEEK","Physta® brand specifically"] },
+  { id:5, weeks:"WEEK 6", label:"METHYLATION TRANSITION", status:"UPCOMING", statusBg:"#0D9488", borderColor:"#0D9488",
+    cortisolPressure:18, cortisolStatus:"MANAGED",
+    note:"Chewable retires. Standalone Jarrow Methyl Folate 400mcg (already owned) + Jarrow Methyl B-12 sublingual. Same dose, better delivery.",
+    cortisolNote:"Methylation compounds cortisol-neutral at 400mcg.",
+    supplements:[
+      {name:"Jarrow Methyl Folate 400mcg",dose:"400mcg",timing:"MORNING",goals:["METHYLATION","DEPRESSION"],fixed:false,note:"ALREADY OWNED. Replaces chewable."},
+      {name:"Jarrow Methyl B-12 sublingual",dose:"1000mcg",timing:"MORNING",goals:["METHYLATION","TBI"],fixed:false,note:"Sublingual methylcobalamin — superior absorption."},
+    ],
+    hardware:[], actions:["Chewable retired — consolidation step only"] },
+  { id:6, weeks:"WEEK 7", label:"CORTISOL-T STACK COMPLETE", status:"UPCOMING", statusBg:"#4338CA", borderColor:"#4338CA",
+    cortisolPressure:12, cortisolStatus:"OPTIMAL",
+    note:"Ashwagandha KSM-66 — the Tongkat Ali accelerant. Cortisol-T Stack complete: Tongkat Ali frees testosterone, Ashwagandha removes cortisol HPG suppression.",
+    cortisolNote:"✅ OPTIMAL — SMD -1.18 cortisol reduction. 300mg at 8PM WITH CalmAid = strongest cortisol defense in protocol.",
+    supplements:[
+      {name:"Ashwagandha KSM-66",dose:"300mg",timing:"EVENING",goals:["CORTISOL","TESTOSTERONE","DEPRESSION"],fixed:false,note:"8PM with CalmAid. 300mg avoids anhedonia at 600mg."},
+    ],
+    hardware:[], actions:["Tongkat Ali still 100mg for 2 more weeks"] },
+  { id:7, weeks:"WEEK 8", label:"COFACTOR MATRIX", status:"UPCOMING", statusBg:"#0D9488", borderColor:"#0D9488",
+    cortisolPressure:12, cortisolStatus:"OPTIMAL",
+    note:"Priority One replaces standalone methylfolate + B12. Adds R5P (Complexes I+II — completes red light's Complex IV), TMG 500mg (T in 3 RCTs), P5P 30mg (AADC cofactor). MethylPro 1mg first real step.",
+    cortisolNote:"TMG → SAMe → COMT upregulation may degrade excess catecholamines. Net cortisol-protective.",
+    supplements:[
+      {name:"Priority One Folate Methylation",dose:"1 cap\n583mcg MF\n1000mcg B12\n30mg P5P\n500mg TMG\n50mg R5P",timing:"MORNING",goals:["METHYLATION","DEPRESSION","TESTOSTERONE"],fixed:false,note:"REPLACES standalone folate + B12. Biotin 1000mcg — stop 72h before blood draw."},
+      {name:"MethylPro 1mg",dose:"1mg",timing:"MORNING",goals:["METHYLATION","DEPRESSION"],fixed:false,note:"First real step-up. + Priority One 583mcg = ~1.6mg total."},
+    ],
+    hardware:[], actions:["Priority One REPLACES — not addition","Monitor for over-methylation: anxiety, irritability, insomnia"] },
+  { id:8, weeks:"WEEK 9", label:"TESTOSTERONE STEP-UP", status:"UPCOMING", statusBg:"#C2410C", borderColor:"#C2410C",
+    cortisolPressure:14, cortisolStatus:"MANAGED",
+    note:"If 4 weeks at 100mg stable (HRV ≥85ms Oura balance, RHR 47-50, no cardiac irregularity) → step to 200mg. SAME BOTTLE.",
+    cortisolNote:"Ashwagandha established 2 weeks. CalmAid holding. Cortisol defense strongest before T increase.",
+    supplements:[
+      {name:"Tongkat Ali Physta®",dose:"200mg\n↑ from 100mg",timing:"MORNING",goals:["TESTOSTERONE"],fixed:false,note:"SAME BOTTLE — dose only. Significant from Week 2 in multicenter RCT."},
+    ],
+    hardware:[], actions:["Confirm biometrics stable — HRV, RHR, no cardiac symptoms"] },
+  { id:9, weeks:"WEEKS 10–11", label:"DOSE OPTIMIZATION", status:"UPCOMING", statusBg:"#6D28D9", borderColor:"#6D28D9",
+    cortisolPressure:12, cortisolStatus:"OPTIMAL",
+    note:"Three dose increases. Same products — dose adjustments only. All matched to peak clinical evidence targets.",
+    cortisolNote:"All three cortisol-neutral. MagMind HRV + EPA SPM reduce chronic inflammatory cortisol pressure.",
+    supplements:[
+      {name:"EPA Omega-3",dose:"2 softgels\n1,470mg EPA",timing:"MORNING",goals:["DEPRESSION","ADHD","TBI"],fixed:false,note:"Week 10. Depression peak: 1–1.5g EPA. ADHD g=1.09. SAME BOTTLE."},
+      {name:"MagMind (Jarrow Magtein)",dose:"2 capsules\n288mg",timing:"MORNING",goals:["ADHD","TBI"],fixed:false,note:"Week 11. Jan 2026 RCT therapeutic dose. SAME BOTTLE."},
+      {name:"Lion's Mane (Real Mushrooms)",dose:"2 capsules\n1g",timing:"MORNING",goals:["TBI","ADHD","DEPRESSION"],fixed:false,note:"Week 11. SAME BOTTLE."},
+    ],
+    hardware:[], actions:["Same bottles throughout"] },
+  { id:10, weeks:"WEEK 12", label:"METHYLATION — 5mg", status:"UPCOMING", statusBg:"#0D9488", borderColor:"#0D9488",
+    cortisolPressure:12, cortisolStatus:"OPTIMAL",
+    note:"MethylPro 5mg replaces 1mg. Priority One cofactor matrix established 4 weeks. 5mg step lands in optimized enzymatic system.",
+    cortisolNote:"5mg = WFSBP threshold. Serotonin synthesis acceleration → 5-HT2C CRH modulation = natural cortisol regulation activates.",
+    supplements:[
+      {name:"MethylPro 5mg",dose:"5mg\n↑ from 1mg",timing:"MORNING",goals:["METHYLATION","DEPRESSION"],fixed:false,note:"New product purchase. + Priority One 583mcg = ~5.6mg total."},
+    ],
+    hardware:[], actions:["MethylPro 1mg retired","Morning glycine as methyl buffer if needed"] },
+  { id:11, weeks:"WEEK 14+", label:"THERAPEUTIC TARGET — COMPLETE", status:"UPCOMING", statusBg:"#1D4ED8", borderColor:"#1D4ED8",
+    cortisolPressure:10, cortisolStatus:"OPTIMAL",
+    note:"Triquetra 15mg — ALREADY OWNED, Best By 07/26. Full therapeutic depression dose. 9 RCTs, 6,000+ patients. Protocol complete.",
+    cortisolNote:"✅ OPTIMAL — 15mg methylfolate fully unblocks serotonin synthesis. Serotonin via 5-HT2C modulates CRH — primary natural cortisol regulatory loop.",
+    supplements:[
+      {name:"Triquetra 15mg 5-MTHF",dose:"15mg\n↑ from 5mg",timing:"MORNING",goals:["METHYLATION","DEPRESSION","ADHD"],fixed:false,note:"ALREADY OWNED. Priority One continues alongside — cofactor matrix essential."},
+    ],
+    hardware:[], actions:["MethylPro 5mg retired","ENCLOMIPHENE TELEHEALTH — specify enclomiphene, not clomiphene"] },
+];
+
+// ── Live data helpers ───────────────────────────────────────────────
+function extractWhoop(data) {
+  const cycles = data?._debug?.cycle?.data?.records || [];
+  const cur = cycles[0], prev = cycles[1];
+  return {
+    strain: cur?.score?.strain?.toFixed(1) ?? '—',
+    avgHR: cur?.score?.average_heart_rate ?? '—',
+    maxHR: cur?.score?.max_heart_rate ?? '—',
+    prevStrain: prev?.score?.strain?.toFixed(1) ?? '—',
+    weight: data?._debug?.body?.data?.weight_kilogram ?? null,
+    fetchedAt: data?.fetched_at,
+  };
+}
+function extractOura(data) {
+  const rd = data?.daily_readiness?.data?.data ?? [];
+  const sl = data?.daily_sleep?.data?.data ?? [];
+  const sp = data?.daily_spo2?.data?.data ?? [];
+  const st = data?.daily_stress?.data?.data ?? [];
+  const ac = data?.daily_activity?.data?.data ?? [];
+  const latest = arr => arr[arr.length - 1];
+  const r = latest(rd), s = latest(sl), o = latest(sp), t = latest(st), a = latest(ac);
+  return {
+    readinessScore: r?.score ?? '—',
+    readinessDay: r?.day ?? '',
+    hrv: r?.contributors?.hrv_balance ?? '—',
+    rhr: r?.contributors?.resting_heart_rate ?? '—',
+    sleepScore: s?.score ?? '—',
+    rem: s?.contributors?.rem_sleep ?? '—',
+    deep: s?.contributors?.deep_sleep ?? '—',
+    efficiency: s?.contributors?.efficiency ?? '—',
+    spo2: o?.spo2_percentage?.average?.toFixed(1) ?? '—',
+    stress: t?.day_summary ?? '—',
+    steps: a?.steps?.toLocaleString() ?? '—',
+    fetchedAt: data?.fetched_at,
+  };
+}
+
+// ── Small components ─────────────────────────────────────────────────
+function GoalTag({ g }) {
+  const c = GOALS[g];
+  return c ? <span className="text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap" style={{background:c.bg,color:c.text}}>{c.label}</span> : null;
+}
+function TimingBadge({ t }) {
+  const c = TIMING[t];
+  return c ? <span className="text-xs font-bold px-2 py-0.5 rounded whitespace-nowrap" style={{background:c.bg,color:c.text}}>{c.label}</span> : null;
+}
+function CortisolBar({ pressure, status }) {
+  const c = CORTISOL_C[status] || CORTISOL_C.MANAGED;
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      <span className="text-xs font-bold tracking-widest" style={{color:'#0A1628',fontSize:9}}>CORTISOL</span>
+      <div className="flex-1 h-1.5 rounded-full" style={{background:'#E5E7EB'}}>
+        <div className="h-1.5 rounded-full" style={{width:`${Math.max(0,Math.min(100,pressure))}%`,background:c.bar}}/>
+      </div>
+      <span className="text-xs font-bold px-1.5 py-0.5 rounded-full" style={{background:c.bg,color:c.text,fontSize:9}}>{status}</span>
+    </div>
+  );
+}
+function StatBox({ label, value, sub, light }) {
+  return (
+    <div className="rounded-xl py-2 px-2 text-center" style={{background: light ? '#1E2D4F' : '#2D3F6B'}}>
+      <div className="font-bold" style={{color:'#818CF8',fontSize:9,letterSpacing:'0.12em'}}>{label}</div>
+      <div className="font-black" style={{color:'#fff',fontSize:22,lineHeight:1.1}}>{value}</div>
+      {sub && <div className="font-bold" style={{color:'#22D3EE',fontSize:9}}>{sub}</div>}
+    </div>
+  );
+}
+function MetricRow({ label, value, color }) {
+  return (
+    <div className="flex justify-between items-center py-1.5 border-b" style={{borderColor:'#F3F4F6'}}>
+      <span className="font-bold" style={{color:'#374151',fontSize:12}}>{label}</span>
+      <span className="font-black font-mono" style={{color: color || '#0A1628',fontSize:13}}>{value}</span>
+    </div>
+  );
+}
+
+// ── Supplement row ───────────────────────────────────────────────────
+function SuppRow({ s, isNew }) {
+  return (
+    <div className="p-3 rounded-xl mb-2" style={{
+      border: isNew ? '2px solid #2563EB' : '1px solid #E5E7EB',
+      background: isNew ? '#EFF6FF' : '#FAFAFA',
+    }}>
+      <div className="flex justify-between items-start mb-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {isNew && <span className="font-black text-white rounded px-1.5" style={{background:'#2563EB',fontSize:9,letterSpacing:'0.1em'}}>NEW</span>}
+          <span className="font-bold" style={{color:'#0A1628',fontSize:13}}>{s.name}</span>
+        </div>
+        <span className="font-black font-mono text-right whitespace-pre-line ml-2" style={{color:'#0A1628',fontSize:12}}>{s.dose}</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5 mb-1">
+        <TimingBadge t={s.timing}/>
+        {s.goals.map(g => <GoalTag key={g} g={g}/>)}
+        {s.fixed && <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{background:'#F3F4F6',color:'#374151'}}>FIXED DOSE</span>}
+      </div>
+      {s.note && <p className="text-xs" style={{color:'#4B5563',lineHeight:1.4}}>{s.note}</p>}
+    </div>
+  );
+}
+
+// ── Phase card ───────────────────────────────────────────────────────
+function PhaseCard({ phase, prevSupps, defaultOpen }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const prevNames = new Set((prevSupps||[]).map(s=>s.name));
+  const newSupps = phase.supplements.filter(s=>!prevNames.has(s.name));
+  const contSupps = phase.supplements.filter(s=>prevNames.has(s.name));
+  const cc = CORTISOL_C[phase.cortisolStatus]||CORTISOL_C.MANAGED;
+  return (
+    <div className="rounded-2xl overflow-hidden mb-3 shadow-sm" style={{border:`2px solid ${phase.borderColor}`}}>
+      <button className="w-full text-left p-0 border-0 bg-transparent cursor-pointer" onClick={()=>setOpen(o=>!o)}>
+        <div className="flex items-stretch">
+          <div className="flex flex-col items-center justify-center px-4 py-3" style={{background:phase.borderColor,minWidth:70}}>
+            <span className="font-black text-white" style={{fontSize:9,letterSpacing:'0.2em'}}>PHASE</span>
+            <span className="font-black text-white" style={{fontSize:28,lineHeight:1}}>{phase.id}</span>
+          </div>
+          <div className="flex-1 px-4 py-2.5 bg-white">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-black" style={{color:'#0A1628',fontSize:10,letterSpacing:'0.15em'}}>{phase.weeks}</span>
+              <span className="font-black text-white rounded-full px-2" style={{background:phase.statusBg,fontSize:9,letterSpacing:'0.1em'}}>{phase.status}</span>
+            </div>
+            <div className="font-black" style={{color:'#0A1628',fontSize:15,letterSpacing:'-0.01em'}}>{phase.label}</div>
+            <CortisolBar pressure={phase.cortisolPressure} status={phase.cortisolStatus}/>
+          </div>
+          <div className="flex items-center px-3" style={{background:'#F9FAFB'}}>
+            <span style={{color:'#6B7280',fontSize:14,fontWeight:700}}>{open?'▲':'▼'}</span>
+          </div>
+        </div>
+      </button>
+      {open && (
+        <div className="p-4 bg-white">
+          <p className="text-sm mb-3" style={{color:'#1F2937',lineHeight:1.5}}>{phase.note}</p>
+          <div className="rounded-xl p-3 mb-4 text-xs" style={{background:cc.bg,borderLeft:`4px solid ${cc.bar}`,color:cc.text,lineHeight:1.4}}>
+            <span className="font-black" style={{letterSpacing:'0.06em'}}>CORTISOL — </span>{phase.cortisolNote}
+          </div>
+          {newSupps.length > 0 && <>
+            <div className="font-black mb-2" style={{color:'#2563EB',fontSize:10,letterSpacing:'0.15em'}}>➕ INTRODUCING</div>
+            {newSupps.map(s=><SuppRow key={s.name+s.timing} s={s} isNew={true}/>)}
+          </>}
+          {contSupps.length > 0 && <>
+            <div className="font-black mb-2 mt-2" style={{color:'#6B7280',fontSize:10,letterSpacing:'0.15em'}}>✓ CONTINUING</div>
+            {contSupps.map(s=>(
+              <div key={s.name+s.timing} className="flex justify-between items-center px-3 py-1.5 rounded-xl mb-1" style={{background:'#F9FAFB'}}>
+                <span className="font-semibold text-sm" style={{color:'#374151'}}>{s.name}</span>
+                <span className="font-black font-mono text-sm" style={{color:'#0A1628'}}>{s.dose}</span>
+              </div>
+            ))}
+          </>}
+          {phase.hardware?.length > 0 && <>
+            <div className="font-black mb-2 mt-2" style={{color:'#0369A1',fontSize:10,letterSpacing:'0.15em'}}>⚡ HARDWARE</div>
+            {phase.hardware.map(h=>(
+              <div key={h.name} className="px-3 py-2 rounded-xl mb-1" style={{background:'#EFF6FF'}}>
+                <div className="font-bold text-sm" style={{color:'#1E3A8A'}}>{h.name}</div>
+                {h.note && <div className="text-xs" style={{color:'#1E40AF'}}>{h.note}</div>}
+              </div>
+            ))}
+          </>}
+          {phase.actions?.length > 0 && <>
+            <div className="font-black mb-2 mt-2" style={{color:'#374151',fontSize:10,letterSpacing:'0.15em'}}>📋 ACTIONS</div>
+            {phase.actions.map((a,i)=>(
+              <div key={i} className="flex gap-2 mb-1.5">
+                <span style={{color:'#6B7280',fontSize:12}}>—</span>
+                <span className="text-xs" style={{color:'#374151',lineHeight:1.4}}>{a}</span>
+              </div>
+            ))}
+          </>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main app ─────────────────────────────────────────────────────────
+function App() {
+  const [whoop, setWhoop] = useState(null);
+  const [oura, setOura]   = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    Promise.all([
+      fetch(WHOOP_URL).then(r=>r.json()).catch(()=>null),
+      fetch(OURA_URL).then(r=>r.json()).catch(()=>null),
+    ]).then(([w, o]) => {
+      setWhoop(w ? extractWhoop(w) : null);
+      setOura(o ? extractOura(o) : null);
+      setLoading(false);
+    }).catch(e => { setErr(e.message); setLoading(false); });
+  }, []);
+
+  const w = whoop || {};
+  const o = oura  || {};
+
+  const ouraDate = o.readinessDay ? new Date(o.readinessDay).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—';
+  const whoopAge = w.fetchedAt ? new Date(w.fetchedAt).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '—';
+
+  return (
+    <div className="min-h-screen py-4 px-3" style={{background:'#EEF2FF'}}>
+
+      {/* Masthead */}
+      <div className="rounded-2xl p-4 mb-4 shadow-lg" style={{background:'#0A1628'}}>
+        <div className="font-black" style={{color:'#818CF8',fontSize:9,letterSpacing:'0.3em',marginBottom:4}}>BIOMETRIC-GUIDED SUPPLEMENT PROTOCOL</div>
+        <div className="font-black" style={{color:'#fff',fontSize:24,letterSpacing:'-0.02em',lineHeight:1.1,marginBottom:14}}>Implementation Schedule</div>
+        {loading && <div className="text-center py-4" style={{color:'#818CF8',fontSize:13}}>Loading live data…</div>}
+        {!loading && (
+          <div className="grid grid-cols-3 gap-2">
+            <StatBox label="HRV BALANCE" value={o.hrv} sub={`Oura ${ouraDate}`}/>
+            <StatBox label="TODAY STRAIN" value={w.strain} sub={`Max HR ${w.maxHR}`}/>
+            <StatBox label="READINESS" value={o.readinessScore} sub={o.stress !== '—' ? o.stress.toUpperCase() : ''}/>
+          </div>
+        )}
+      </div>
+
+      {/* Live panels */}
+      {!loading && (
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          {/* Oura panel */}
+          <div className="rounded-2xl p-4 shadow-sm bg-white" style={{border:'1px solid #E5E7EB'}}>
+            <div className="font-black mb-3" style={{color:'#0A1628',fontSize:10,letterSpacing:'0.15em'}}>OURA · {ouraDate}</div>
+            <MetricRow label="Readiness" value={o.readinessScore} color={o.readinessScore >= 80 ? '#16A34A' : o.readinessScore >= 70 ? '#CA8A04' : '#DC2626'}/>
+            <MetricRow label="Sleep" value={o.sleepScore}/>
+            <MetricRow label="REM" value={o.rem}/>
+            <MetricRow label="Deep" value={o.deep}/>
+            <MetricRow label="SpO2" value={o.spo2 !== '—' ? `${o.spo2}%` : '—'}/>
+            <MetricRow label="Steps" value={o.steps}/>
+          </div>
+          {/* Whoop panel */}
+          <div className="rounded-2xl p-4 shadow-sm bg-white" style={{border:'1px solid #E5E7EB'}}>
+            <div className="font-black mb-3" style={{color:'#0A1628',fontSize:10,letterSpacing:'0.15em'}}>WHOOP · {whoopAge}</div>
+            <MetricRow label="Strain" value={w.strain} color="#7C3AED"/>
+            <MetricRow label="Prev Strain" value={w.prevStrain}/>
+            <MetricRow label="Avg HR" value={w.avgHR ? `${w.avgHR} bpm` : '—'}/>
+            <MetricRow label="Max HR" value={w.maxHR ? `${w.maxHR} bpm` : '—'}/>
+            <MetricRow label="HRV Bal" value={o.hrv}/>
+            <MetricRow label="RHR" value={o.rhr ? `${o.rhr} bpm` : '—'}/>
+          </div>
+        </div>
+      )}
+
+      {/* Core stack */}
+      <div className="rounded-2xl p-4 mb-4 bg-white" style={{border:'2px solid #16A34A'}}>
+        <div className="font-black mb-3" style={{color:'#16A34A',fontSize:10,letterSpacing:'0.1em'}}>✅ CORE STACK — ALL DOSES AT EVIDENCE OPTIMA — NO CHANGES</div>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            {name:"CalmAid",dose:"80mg @ 8PM",note:"9hr half-life — fixed timing"},
+            {name:"PEA Levagen+",dose:"600mg split",note:"300mg AM + 300mg 3PM"},
+            {name:"Boron",dose:"6mg daily",note:"No cycling — continuous"},
+            {name:"Saffron affron®",dose:"30mg bedtime",note:"Do not reduce below 30mg"},
+            {name:"Glycine",dose:"3g bedtime",note:"SCN NMDA — sleep optimal"},
+            {name:"Mag Glycinate",dose:"Continue",note:"GABA-A + SHBG + sleep"},
+          ].map(c=>(
+            <div key={c.name} className="rounded-xl px-3 py-2" style={{background:'#F0FDF4'}}>
+              <div className="font-bold" style={{color:'#14532D',fontSize:11}}>{c.name}</div>
+              <div className="font-black font-mono" style={{color:'#0A1628',fontSize:13}}>{c.dose}</div>
+              <div style={{color:'#374151',fontSize:10}}>{c.note}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Cortisol principle */}
+      <div className="rounded-2xl p-4 mb-4" style={{background:'#FEF3C7',borderLeft:'6px solid #D97706'}}>
+        <div className="font-black mb-1.5" style={{color:'#78350F',fontSize:10,letterSpacing:'0.15em'}}>CORTISOL MANAGEMENT PRINCIPLE</div>
+        <p className="font-semibold text-sm" style={{color:'#78350F',lineHeight:1.5}}>
+          Every testosterone compound is preceded or accompanied by a cortisol-management compound. CalmAid (8PM) anchors the protocol. Ashwagandha 300mg (8PM, Week 7) removes cortisol HPG axis suppression before testosterone dose increases. No step-up without confirmed HRV stability.
+        </p>
+      </div>
+
+      {/* Phase cards */}
+      {phases.map((p,i) => (
+        <PhaseCard key={p.id} phase={p} prevSupps={i>0?phases[i-1].supplements:[]} defaultOpen={p.status==="NOW"}/>
+      ))}
+
+      {/* Clinical priorities */}
+      <div className="rounded-2xl p-4 mt-2" style={{background:'#0A1628'}}>
+        <div className="font-black mb-3" style={{color:'#818CF8',fontSize:10,letterSpacing:'0.2em'}}>CLINICAL PRIORITIES — OUTSIDE THIS CHART</div>
+        {[
+          {label:"ENCLOMIPHENE",desc:"+273 ng/dL testosterone. 10 RCTs. One telehealth appointment — specify enclomiphene, not clomiphene.",dot:"#EF4444"},
+          {label:"BLOOD PANEL",desc:"CBC + ferritin + Vitamin D. Finger-prick before Tongkat Ali Week 5.",dot:"#F59E0B"},
+          {label:"EMDR THERAPY",desc:"2018 amygdala fear encoding. Unlocks all deferred pharmaceutical options.",dot:"#8B5CF6"},
+          {label:"STRENGTH TRAINING 3×/WEEK",desc:"+2.8 Whoop Age years. PFC gray matter. Anabolic environment.",dot:"#22D3EE"},
+          {label:"PRE-MIDNIGHT BEDTIME",desc:"Jun 21 proved 86 OPTIMAL. Jun 26 REM 95 at 98% efficiency.",dot:"#4ADE80"},
+        ].map(p=>(
+          <div key={p.label} className="flex gap-3 mb-2 items-start">
+            <div className="rounded-full flex-shrink-0 mt-0.5" style={{width:8,height:8,background:p.dot,marginTop:4}}/>
+            <div><span className="font-black" style={{color:'#fff',fontSize:11,letterSpacing:'0.06em'}}>{p.label} — </span><span style={{color:'#94A3B8',fontSize:11}}>{p.desc}</span></div>
+          </div>
+        ))}
+        <div className="mt-4 pt-3" style={{borderTop:'1px solid #1E2D4F'}}>
+          <div className="font-black" style={{color:'#818CF8',fontSize:9,letterSpacing:'0.15em'}}>DATA SOURCES</div>
+          <div style={{color:'#64748B',fontSize:10,marginTop:4}}>
+            Whoop: field-relay-nba.jeffunglesbee.workers.dev · Oura: jubilant-bassoon/outbox · Apple Health: device-only
+          </div>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+ReactDOM.render(<App/>, document.getElementById('root'));
+</script>
+</body>
+</html>
