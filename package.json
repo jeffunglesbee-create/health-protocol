@@ -1,0 +1,22 @@
+{
+  "name": "health-protocol",
+  "version": "1.0.0",
+  "description": "Personal health protocol dashboard — biometric-guided supplement implementation",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://local_proxy@127.0.0.1:41729/git/jeffunglesbee-create/health-protocol"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "wrangler": "^4.105.0"
+  }
+}
