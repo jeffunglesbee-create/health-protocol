@@ -31,12 +31,15 @@ FROM whoop_tokens
 | expires_at | `2026-06-26 14:35:33` UTC |
 | updated_at | `2026-06-26 13:35:33` UTC |
 
-Token expired ~2.5h ago. The `/whoop/fetch` handler auto-refreshes on expiry — next dashboard load will trigger a refresh_token grant. If that call fails (refresh token also expired/revoked), re-auth via OAuth is required.
+Token expired ~2.5h ago. Stored `refresh_token` was malformed (40-char hex `71762cc4...` — not a valid WHOOP token). Auto-refresh returned `400 invalid_request`. Full OAuth re-auth performed — see Re-auth URL section below.
+
+**Re-auth completed ✅ 2026-06-26T17:34:16Z** — fresh tokens written to D1.
 
 **Re-auth steps if auto-refresh fails:**
-1. Open the WHOOP OAuth authorization URL for this app.
-2. Approve — callback hits `/whoop/callback` and writes fresh tokens to `wc2026.whoop_tokens`.
-3. Verify: probe `/health` (worker up), then open dashboard and confirm live WHOOP data loads.
+1. Generate a random `state` string ≥8 chars (required by WHOOP).
+2. Open the WHOOP OAuth authorization URL (see Re-auth URL section) with your `state` value.
+3. Approve — callback hits `/whoop/callback` and writes fresh tokens to `wc2026.whoop_tokens`.
+4. Verify: `SELECT refresh_len FROM whoop_tokens` confirms `refresh_len > 0`; probe `/whoop/fetch?days=1` confirms live data.
 
 ---
 
@@ -69,12 +72,18 @@ NBA/NHL staleness is expected — seasons ended. Odds daily resets at midnight.
 index.html
   └─ WHOOP_URL = /whoop/fetch?days=5
        └─ field-relay-nba (dc2b372 — deployed ✅)
-            ├─ D1 wc2026: whoop_tokens → EXPIRED (auto-refresh on next call)
+            ├─ D1 wc2026: whoop_tokens → ✅ VALID (re-authed 17:34 UTC, expires 18:34 UTC, refresh_token present)
             └─ → recovery / cycle / sleep / workout / body / profile
                  └─ extractWhoop() → strain, avgHR, maxHR, prevStrain, weight
 
   └─ OURA_URL = jubilant-bassoon/outbox/oura-data.json (separate, not worker)
 ```
+
+**Live data verified 2026-06-26T17:38:28Z:**
+- `cycle` ✅ — today strain 4.09, avg HR 60; yesterday strain 13.58, avg HR 68
+- `body` ✅ — weight 82.93 kg, max HR 190
+- `profile` ✅ — Jeff Unglesbee (user_id 31127063)
+- `recovery` / `sleep` / `workout` → 404 (no data for 1-day window — normal when not scored yet)
 
 ---
 
@@ -91,11 +100,17 @@ index.html
 
 ## Re-auth URL (use when tokens are invalid)
 
+**Important:** WHOOP requires `state` ≥8 chars — generate a random value before opening the URL.
+
 ```
-https://api.prod.whoop.com/oauth/oauth2/auth?client_id=a4c9151b-0a51-461c-808a-120fe5735bfc&redirect_uri=https%3A%2F%2Ffield-relay-nba.jeffunglesbee.workers.dev%2Fwhoop%2Fcallback&response_type=code&scope=offline%20read%3Arecovery%20read%3Acycles%20read%3Asleep%20read%3Aworkout%20read%3Abody_measurement%20read%3Aprofile
+https://api.prod.whoop.com/oauth/oauth2/auth?client_id=a4c9151b-0a51-461c-808a-120fe5735bfc&redirect_uri=https%3A%2F%2Ffield-relay-nba.jeffunglesbee.workers.dev%2Fwhoop%2Fcallback&response_type=code&scope=read%3Arecovery+read%3Acycles+read%3Asleep+read%3Aworkout+read%3Abody_measurement+read%3Aprofile&state=REPLACE_WITH_RANDOM_8CHARS
 ```
 
+Generate `state` with: `python3 -c "import secrets; print(secrets.token_urlsafe(16))"`
+
 After authorizing, `/whoop/callback` writes fresh tokens to `wc2026.whoop_tokens`. The worker auto-refreshes on every `/whoop/fetch` call thereafter — no further manual action needed.
+
+**Note:** WHOOP issues a refresh token for `authorization_code` flow even without `offline` listed explicitly in the developer dashboard scopes UI. The `offline` scope is implicit for this grant type.
 
 ---
 
@@ -108,4 +123,8 @@ After authorizing, `/whoop/callback` writes fresh tokens to `wc2026.whoop_tokens
 | D1 token check | ⚠️ `expires_at 14:35 UTC` — expired |
 | Refresh attempt | ❌ `400 invalid_request` — stored refresh_token was malformed (40-char hex, not valid WHOOP format) |
 | All WHOOP endpoints | ❌ `401 Unauthorized` |
-| **Status** | **Awaiting OAuth re-auth via URL above** |
+| OAuth re-auth (attempt 1) | ❌ Missing `state` param → WHOOP returned `invalid_state` error |
+| OAuth re-auth (attempt 2) | ✅ Success — access + refresh token written to D1 at 17:34 UTC |
+| D1 verification | ✅ `refresh_len: 87`, prefix `a9_COtmX` — valid WHOOP token format |
+| `/whoop/fetch?days=1` | ✅ HTTP 200 — live cycle, body, profile data returned |
+| **Status** | **✅ COMPLETE** |
