@@ -1,130 +1,88 @@
-# Health Protocol Worker — `field-relay-nba`
-
-**Worker URL:** `https://field-relay-nba.jeffunglesbee.workers.dev`  
-**Dashboard consumer:** `index.html` → `WHOOP_URL` constant
+# CC-CMD: Health Protocol Worker Verification
+**Date:** 2026-06-26  
+**Worker:** `field-relay-nba` (`field-relay-nba.jeffunglesbee.workers.dev`)  
+**D1:** `wc2026` (`f26669de-e772-4b56-a6d1-f8fdea08a4d4`) — holds `whoop_tokens`
 
 ---
 
-## What this worker does for the health dashboard
+## Tasks
 
-The `field-relay-nba` Cloudflare Worker is a multi-sport relay that also hosts the WHOOP OAuth integration and data proxy used by this health protocol dashboard. The dashboard fetches live biometric data from:
-
+### 1. Verify worker health
 ```
-GET /whoop/fetch?days=5
+probe_relay_route /health
 ```
+**Result ✅** `RELAY OK — nba + nhl + fpl + ... + analytics-cron, quality-source=analytics-cron`  
+Deployed: `dc2b372` @ 2026-06-26T13:07:21Z. Deploy matches relay head.
 
 ---
 
-## WHOOP endpoints
-
-### `GET /whoop/fetch?days=N`
-
-Primary endpoint used by the dashboard. Returns up to N days of WHOOP biometric data. Automatically refreshes the OAuth token if expired.
-
-**Response shape:**
-
-```json
-{
-  "fetched_at": "2026-06-26T13:00:00.000Z",
-  "days": 5,
-  "recovery":  { "status": 200, "data": { "records": [...] } },
-  "cycle":     { "status": 200, "data": { "records": [...] } },
-  "sleep":     { "status": 200, "data": { "records": [...] } },
-  "workout":   { "status": 200, "data": { "records": [...] } },
-  "body":      { "status": 200, "data": { ... } },
-  "profile":   { "status": 200, "data": { ... } },
-  "_debug": {
-    "has_client_id": true,
-    "has_client_secret": true,
-    "token_len": 512,
-    "token_prefix": "eyJ...",
-    "was_refreshed": false,
-    "expires_at": "2026-06-27T01:00:00",
-    "now": "2026-06-26T13:00:00.000Z"
-  }
-}
+### 2. Check WHOOP token status (D1: wc2026 → whoop_tokens)
+```sql
+SELECT id, length(access_token), substr(access_token,1,8), expires_at, updated_at
+FROM whoop_tokens
 ```
+**Result ⚠️ TOKEN EXPIRED**
 
-Dashboard reads `_debug.cycle.data.records[0]` for current day strain/HR and `_debug.body.data.weight_kilogram` for body weight.
-
-### `GET /whoop/callback?code=<oauth_code>`
-
-OAuth 2.0 authorization code callback. Exchanges the code for access + refresh tokens and stores them in D1 (`whoop_tokens` table, row `id = "primary"`). Returns an HTML confirmation page.
-
-**Redirect URI registered with WHOOP:**  
-`https://field-relay-nba.jeffunglesbee.workers.dev/whoop/callback`
-
-### `GET /whoop/tokens`
-
-Returns the stored token row. Requires `Authorization: Bearer <FIELD_MCP_SECRET>`.
-
-```json
-{
-  "access_token": "...",
-  "refresh_token": "...",
-  "expires_at": "2026-06-27T01:00:00",
-  "updated_at": "2026-06-26T12:00:00"
-}
-```
-
----
-
-## How token refresh works
-
-The `/whoop/fetch` handler:
-
-1. Reads the stored token from D1.
-2. If `expires_at` is in the past, POSTs to `https://api.prod.whoop.com/oauth/oauth2/token` with `grant_type=refresh_token`.
-3. On success, updates D1 with the new access + refresh tokens and new expiry.
-4. Falls through to fetching all endpoints with the (possibly refreshed) token.
-
-If refresh fails (e.g. refresh token revoked), the `_debug.refresh_result` field in the response will contain the error body. Re-run OAuth to fix.
-
----
-
-## Worker health endpoints
-
-### `GET /health`
-
-Returns a plain-text `RELAY OK` string listing all active integrations. No auth required.
-
-### `GET /health/sources`
-
-Returns JSON with freshness checks for all data sources.
-
----
-
-## Re-authorizing WHOOP (if tokens are revoked)
-
-1. Go to the WHOOP developer dashboard and generate a new authorization URL for the app.
-2. Authorize the app — the callback redirects to `/whoop/callback` and stores new tokens.
-3. Verify with `curl https://field-relay-nba.jeffunglesbee.workers.dev/whoop/fetch?days=1` — expect `"status": 200` on all endpoints.
-
----
-
-## Environment variables (Cloudflare secrets)
-
-| Variable | Purpose |
+| field | value |
 |---|---|
-| `WHOOP_CLIENT_ID` | WHOOP OAuth app client ID |
-| `WHOOP_CLIENT_SECRET` | WHOOP OAuth app client secret |
-| `FIELD_MCP_SECRET` | Bearer token for protected admin routes |
-| `DB` | D1 binding — stores `whoop_tokens` |
+| id | `primary` |
+| token_len | 87 |
+| token_prefix | `2ysKtJqJ` |
+| expires_at | `2026-06-26 14:35:33` UTC |
+| updated_at | `2026-06-26 13:35:33` UTC |
+
+Token expired ~2.5h ago. The `/whoop/fetch` handler auto-refreshes on expiry — next dashboard load will trigger a refresh_token grant. If that call fails (refresh token also expired/revoked), re-auth via OAuth is required.
+
+**Re-auth steps if auto-refresh fails:**
+1. Open the WHOOP OAuth authorization URL for this app.
+2. Approve — callback hits `/whoop/callback` and writes fresh tokens to `wc2026.whoop_tokens`.
+3. Verify: probe `/health` (worker up), then open dashboard and confirm live WHOOP data loads.
 
 ---
 
-## Dashboard data flow
+### 3. Check data source freshness
+```
+probe_relay_route /health/sources
+```
+**Result — 4 stale, 6 healthy** (checked 2026-06-26T16:57:57Z)
+
+| Source | Status | Age | Max Age | Note |
+|---|---|---|---|---|
+| mlb_team_abs | ✅ healthy | 97h | 168h | |
+| mlb_pitch_arsenals | ✅ healthy | 97h | 168h | 0 entries (Savant fetch issue, self-heals) |
+| mlb_expected_stats | ✅ healthy | 97h | 168h | 395 entries |
+| nba_clutch_playoffs | ⚠️ stale | 340h | 24h | Season over — heals Oct |
+| nba_clutch_regular | ⚠️ stale | 340h | 24h | Season over — heals Oct |
+| nhl_series_stats | ⚠️ stale | 278h | 4h | SCF over — heals Oct/Nov |
+| wc_group | ✅ healthy | — | — | 48 rows |
+| odds_daily | ⚠️ stale | — | 24h | `exists: false` (no calls today yet) |
+| odds_monthly | ✅ healthy | 0h | 720h | |
+| journalism_brief | ✅ healthy | 0h | 24h | |
+
+NBA/NHL staleness is expected — seasons ended. Odds daily resets at midnight.
+
+---
+
+## Dashboard data flow (verified)
 
 ```
 index.html
-  └─ fetch(WHOOP_URL)  → GET /whoop/fetch?days=5
-       └─ field-relay-nba worker
-            ├─ D1: read whoop_tokens
-            ├─ (if expired) refresh via WHOOP OAuth
-            └─ parallel fetch: recovery, cycle, sleep, workout, body, profile
-                 └─ returns JSON → extractWhoop() in App component
-                      └─ strain, avgHR, maxHR, prevStrain, weight, fetchedAt
+  └─ WHOOP_URL = /whoop/fetch?days=5
+       └─ field-relay-nba (dc2b372 — deployed ✅)
+            ├─ D1 wc2026: whoop_tokens → EXPIRED (auto-refresh on next call)
+            └─ → recovery / cycle / sleep / workout / body / profile
+                 └─ extractWhoop() → strain, avgHR, maxHR, prevStrain, weight
+
+  └─ OURA_URL = jubilant-bassoon/outbox/oura-data.json (separate, not worker)
 ```
 
-Oura data is separate — fetched directly from GitHub raw:  
-`https://raw.githubusercontent.com/jeffunglesbee-create/jubilant-bassoon/main/outbox/oura-data.json`
+---
+
+## Environment
+
+| Binding | Value |
+|---|---|
+| `DB` | `wc2026` D1 database |
+| `WHOOP_CLIENT_ID` | secret |
+| `WHOOP_CLIENT_SECRET` | secret |
+| `FIELD_MCP_SECRET` | secret (guards `/whoop/tokens`) |
