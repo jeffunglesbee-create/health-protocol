@@ -1,0 +1,11 @@
+name            = "health-protocol"
+main            = "src/index.js"
+compatibility_date = "2026-06-26"
+account_id      = "b57e9af57ab46c52ca9215804e689c29"
+
+[[kv_namespaces]]
+binding = "HP_KV"
+id      = "PLACEHOLDER_KV_ID"
+
+# Secrets set via wrangler secret put:
+#   GITHUB_PAT, STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET
