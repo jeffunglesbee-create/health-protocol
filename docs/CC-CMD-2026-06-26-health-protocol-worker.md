@@ -82,7 +82,30 @@ index.html
 
 | Binding | Value |
 |---|---|
-| `DB` | `wc2026` D1 database |
-| `WHOOP_CLIENT_ID` | secret |
-| `WHOOP_CLIENT_SECRET` | secret |
+| `DB` | `wc2026` (`f26669de-e772-4b56-a6d1-f8fdea08a4d4`) |
+| `WHOOP_CLIENT_ID` | `a4c9151b-0a51-461c-808a-120fe5735bfc` (FIELD Health Monitor app) |
+| `WHOOP_CLIENT_SECRET` | secret (see Cloudflare dashboard → field-relay-nba → Settings) |
 | `FIELD_MCP_SECRET` | secret (guards `/whoop/tokens`) |
+
+---
+
+## Re-auth URL (use when tokens are invalid)
+
+```
+https://api.prod.whoop.com/oauth/oauth2/auth?client_id=a4c9151b-0a51-461c-808a-120fe5735bfc&redirect_uri=https%3A%2F%2Ffield-relay-nba.jeffunglesbee.workers.dev%2Fwhoop%2Fcallback&response_type=code&scope=offline%20read%3Arecovery%20read%3Acycles%20read%3Asleep%20read%3Aworkout%20read%3Abody_measurement%20read%3Aprofile
+```
+
+After authorizing, `/whoop/callback` writes fresh tokens to `wc2026.whoop_tokens`. The worker auto-refreshes on every `/whoop/fetch` call thereafter — no further manual action needed.
+
+---
+
+## Execution log (2026-06-26)
+
+| Step | Result |
+|---|---|
+| Worker health | ✅ `RELAY OK` — `dc2b372` deployed |
+| `/health/sources` | ✅ 6 healthy, 4 stale (NBA/NHL seasons over — expected) |
+| D1 token check | ⚠️ `expires_at 14:35 UTC` — expired |
+| Refresh attempt | ❌ `400 invalid_request` — stored refresh_token was malformed (40-char hex, not valid WHOOP format) |
+| All WHOOP endpoints | ❌ `401 Unauthorized` |
+| **Status** | **Awaiting OAuth re-auth via URL above** |
