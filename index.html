@@ -19,8 +19,10 @@
 <script type="text/babel">
 const { useState, useEffect } = React;
 
-const WHOOP_URL = 'https://field-relay-nba.jeffunglesbee.workers.dev/whoop/fetch?days=5';
-const OURA_URL = 'https://raw.githubusercontent.com/jeffunglesbee-create/jubilant-bassoon/main/outbox/oura-data.json';
+const WHOOP_URL  = 'https://health-protocol.jeffunglesbee.workers.dev/whoop';
+  const OURA_URL   = 'https://health-protocol.jeffunglesbee.workers.dev/oura';
+  const STRAVA_URL = 'https://health-protocol.jeffunglesbee.workers.dev/strava';
+
 
 // ── Design tokens ──────────────────────────────────────────────────
 const GOALS = {
@@ -330,15 +332,18 @@ function App() {
   const [whoop, setWhoop] = useState(null);
   const [oura, setOura]   = useState(null);
   const [loading, setLoading] = useState(true);
+  const [strava, setStrava] = useState(null);
   const [err, setErr] = useState(null);
 
   useEffect(() => {
     Promise.all([
       fetch(WHOOP_URL).then(r=>r.json()).catch(()=>null),
       fetch(OURA_URL).then(r=>r.json()).catch(()=>null),
-    ]).then(([w, o]) => {
+      fetch(STRAVA_URL).then(r=>r.json()).catch(()=>null),
+    ]).then(([w, o, s]) => {
       setWhoop(w ? extractWhoop(w) : null);
       setOura(o ? extractOura(o) : null);
+      setStrava(s?.activities?.length ? s : null);
       setLoading(false);
     }).catch(e => { setErr(e.message); setLoading(false); });
   }, []);
