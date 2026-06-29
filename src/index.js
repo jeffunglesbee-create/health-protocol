@@ -33,7 +33,7 @@ export default {
       if (pathname === '/oura')            return handleOura(env);
       if (pathname === '/strava')          return handleStrava(env);
       if (pathname === '/strava/callback') return handleStravaCallback(url, env);
-      if (pathname === '/whoop')           return handleWhoop();
+      if (pathname === '/whoop')           return handleWhoop(env);
       return new Response('Not found', { status: 404, headers: CORS });
     } catch (err) {
       return json({ error: err.message, stack: err.stack?.slice(0, 300) }, 500);
@@ -184,12 +184,18 @@ async function handleStravaCallback(url, env) {
   }
 }
 
-async function handleWhoop() {
+async function handleWhoop(env) {
+  // Reads outbox/whoop-data.json from jubilant-bassoon (same pattern as /oura)
+  // whoop-fetch.yml populates this daily at 9:15AM UTC
+  if (!env.GITHUB_PAT) return json({ error: 'GITHUB_PAT secret not set' }, 503);
   try {
-    const r = await fetch('https://field-relay-nba.jeffunglesbee.workers.dev/whoop/fetch?days=5');
+    const r = await fetch(
+      'https://raw.githubusercontent.com/jeffunglesbee-create/jubilant-bassoon/main/outbox/whoop-data.json',
+      { headers: { Authorization: `token ${env.GITHUB_PAT}`, Accept: 'application/json' } }
+    );
     if (!r.ok) return json({ error: `whoop upstream ${r.status}` }, r.status);
     return new Response(await r.text(), {
-      headers: { 'Content-Type': 'application/json', ...CORS, 'Cache-Control': 'public, max-age=60' },
+      headers: { 'Content-Type': 'application/json', ...CORS, 'Cache-Control': 'public, max-age=300' },
     });
   } catch (err) {
     return json({ error: `whoop fetch failed: ${err.message}` }, 502);
